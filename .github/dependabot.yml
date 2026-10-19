@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups: { actions: { patterns: ["*"] } }
+  - package-ecosystem: npm
+    directory: /agent
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups: { agent: { patterns: ["*"] } }
+  - package-ecosystem: uv
+    directory: /
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups: { python: { patterns: ["*"] } }

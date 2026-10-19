@@ -67,26 +67,27 @@ uv run pi-briefing run --config /tmp/config.json --state /tmp/briefing-state
 ## Deploy to Posit Connect Cloud
 
 Connect Cloud installs Python packages from `app/requirements.txt`. The pi-briefing wheel is not
-on PyPI, so `requirements.txt` gets it from a direct URL. A GitHub release of this repository is a
-good place for it.
+on PyPI, so `requirements.txt` gets it from a direct URL to a GitHub release asset. The
+[Release workflow](.github/workflows/release.yml) builds, tests, and attaches the wheels when you
+push a version tag.
 
-1. Push this repository to a public GitHub repository.
-2. Build the wheels and attach them to a release:
+To release a new version:
 
-   ```bash
-   make wheels
-   gh release create v0.1.0 dist/wheels/*.whl --title v0.1.0 --notes "Agent wheels"
-   ```
-
-3. Write `app/requirements.txt` with the release URL, then commit it:
+1. Set the same version in `agent/package.json` and `python/pi_briefing/__init__.py`.
+2. Point `app/requirements.txt` at the new release, then commit:
 
    ```bash
-   make requirements WHEEL_BASE_URL=https://github.com/OWNER/REPO/releases/download/v0.1.0
+   make requirements WHEEL_BASE_URL=https://github.com/statik/connect-embed-durable/releases/download/v0.2.0
    ```
 
-4. In Connect Cloud, deploy a Shiny app from the repository. Set the primary file to
+3. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`. The workflow stops if the tag and
+   the version differ, or if `app/requirements.txt` is stale.
+
+To deploy:
+
+1. In Connect Cloud, deploy a Shiny app from this repository. Set the primary file to
    `app/app.py` and the Python version to 3.13.
-5. Add the secret variable `ANTHROPIC_API_KEY`. You can also add `GITHUB_TOKEN`. A fine-grained
+2. Add the secret variable `ANTHROPIC_API_KEY`. You can also add `GITHUB_TOKEN`. A fine-grained
    token with no extra permissions can read public repositories.
 
 The app writes a briefing on the first visit each day. Later visits that day get the stored
