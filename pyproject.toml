@@ -1,12 +1,12 @@
 [project]
 name = "connect-embed-durable"
-version = "0.1.0"
+version = "0.1.1"
 description = "A pi-durable daily GitHub briefing agent, configured from Shiny, deployable to Posit Connect Cloud"
 license = "MIT"
 requires-python = ">=3.13"
 dependencies = [
     "markdown-it-py==4.2.0",
-    "pi-briefing==0.1.0",
+    "pi-briefing==0.1.1",
     "pyyaml==6.0.3",
     "shiny==1.8.0",
 ]
@@ -21,7 +21,8 @@ dev = [
 
 [tool.uv]
 package = false
-# The platform wheels `wheel/build_wheels.py` writes; uv picks the one for this machine.
+# The platform wheels `wheel/build_wheels.py` writes; uv picks the one for this machine. For an
+# exact pin, uv prefers these over a same-named package on PyPI.
 find-links = ["dist/wheels"]
 
 [tool.pytest.ini_options]

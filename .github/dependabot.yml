@@ -14,4 +14,6 @@ updates:
     directory: /
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
+    # Built in this repository and released as GitHub assets; not on PyPI.
+    ignore: [{ dependency-name: pi-briefing }]
     groups: { python: { patterns: ["*"] } }

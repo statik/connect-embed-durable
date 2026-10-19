@@ -56,6 +56,31 @@ export interface BriefingResult {
 
 /** Repair rounds after the first answer; each is a durable follow-up with its own request ID. */
 const MAX_REPAIRS = 2;
+
+/** The model cannot be used as configured; nothing ran. The message says what to set. */
+export class ModelSetupError extends Error {
+	override readonly name = "ModelSetupError";
+}
+
+/** Fail before any storage or model work when the provider, model, or key is missing. */
+export async function checkModel(models: Models, choice: ModelChoice): Promise<void> {
+	const provider = models.getProvider(choice.provider);
+	if (provider === undefined) {
+		const known = models
+			.getProviders()
+			.map((p) => p.id)
+			.join(", ");
+		throw new ModelSetupError(`Unknown model provider "${choice.provider}". Known: ${known}`);
+	}
+	if (models.getModel(choice.provider, choice.modelId) === undefined) {
+		throw new ModelSetupError(`${provider.name} has no model "${choice.modelId}"`);
+	}
+	if ((await models.getAuth(choice.provider)) === undefined) {
+		const key = provider.auth.apiKey?.name ?? `${provider.name} credentials`;
+		const variable = `${provider.id.toUpperCase().replaceAll("-", "_")}_API_KEY`;
+		throw new ModelSetupError(`No ${key} found. Set it, usually as ${variable}.`);
+	}
+}
 const HOUR_MS = 3_600_000;
 
 /** The window ends at the end of `date`, or now when `date` is today. */
@@ -137,9 +162,7 @@ async function ask(
 		const detail =
 			raw === undefined ? "" : `: ${typeof raw === "string" ? raw : JSON.stringify(raw)}`;
 		const hint =
-			settled.reason === "model_error"
-				? ". Check the model and its provider's API key, such as ANTHROPIC_API_KEY."
-				: "";
+			settled.reason === "model_error" ? ". Check the model name and its provider's API key." : "";
 		throw new Error(
 			`The briefing was not answered (${settled.reason ?? settled.status})${detail}${hint}`,
 		);
@@ -220,6 +243,7 @@ async function writeBriefing(harness: Harness, key: string, options: RunOptions)
  * again with the same date and config resumes the same conversation and request.
  */
 export async function runBriefing(options: RunOptions): Promise<BriefingResult> {
+	await checkModel(options.models, options.model);
 	const registry = createRegistry();
 	registry.install(createBriefingExtension(options.github));
 	const storage = await openNodeSqliteStorage(options.storagePath);

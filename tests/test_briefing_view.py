@@ -46,10 +46,10 @@ def test_run_details_says_where_the_briefing_came_from() -> None:
     result = {
         "resumed": True,
         "window": {"since": "2026-10-18T09:30:00.000Z", "until": "2026-10-19T09:30:00.000Z"},
-        "model": "anthropic/claude-sonnet-5-5",
+        "model": "openrouter/anthropic/claude-sonnet-5.5",
         "usage": {"input": 1200, "output": 300, "costUsd": 0.0123},
     }
     assert run_details(result) == (
         "Served from durable storage · 2026-10-18T09:30Z to 2026-10-19T09:30Z · "
-        "anthropic/claude-sonnet-5-5 · 1,500 tokens · $0.0123"
+        "openrouter/anthropic/claude-sonnet-5.5 · 1,500 tokens · $0.0123"
     )

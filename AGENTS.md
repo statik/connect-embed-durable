@@ -20,7 +20,7 @@ services use generic User-Agent values (`pi-briefing-agent`, `pi-briefing-setup`
 
 - `make check`: every linter and type checker. Fix all warnings.
 - `make test`: builds the wheels, then runs vitest and pytest against the real executable.
-- `BRIEFING_LIVE=1` enables live GitHub tests. `ANTHROPIC_API_KEY` enables the end-to-end test.
+- `BRIEFING_LIVE=1` enables live GitHub tests. `OPENROUTER_API_KEY` enables the end-to-end test.
 
 ## Rules for this code
 

@@ -46,10 +46,10 @@ model to repair the briefing, at most two times. The app then shows a **Verified
 ## Run it locally
 
 You need [Bun](https://bun.sh), [pnpm](https://pnpm.io), [uv](https://docs.astral.sh/uv/), and an
-Anthropic API key.
+[OpenRouter](https://openrouter.ai) API key.
 
 ```bash
-export ANTHROPIC_API_KEY=...        # or set BRIEFING_MODEL to another provider/model
+export OPENROUTER_API_KEY=...       # or set BRIEFING_MODEL and that provider's key
 export GITHUB_TOKEN=...             # optional; raises GitHub's rate limit from 60 to 5,000 an hour
 make dev                            # builds the agent and the wheels, then runs the app
 ```
@@ -63,6 +63,24 @@ You can also run the agent without the app:
 echo '{"repos":[{"name":"posit-dev/commons"}],"lookbackHours":168}' > /tmp/config.json
 uv run pi-briefing run --config /tmp/config.json --state /tmp/briefing-state
 ```
+
+## Choose a model
+
+The default model is `openrouter/anthropic/claude-sonnet-5.5`, so the only key you need is
+`OPENROUTER_API_KEY`. To use another model, set `BRIEFING_MODEL` to `provider/model`, with any
+provider and model in [pi-ai](https://github.com/earendil-works/pi/tree/main/packages/ai)'s
+catalog. Then set that provider's key. Some examples:
+
+| `BRIEFING_MODEL` | Key |
+|---|---|
+| `openrouter/~anthropic/claude-sonnet-latest` | `OPENROUTER_API_KEY` |
+| `anthropic/claude-sonnet-5-5` | `ANTHROPIC_API_KEY` |
+
+The agent checks the provider, the model, and the key before it starts. If one is wrong, it stops
+and says what to set.
+
+A briefing keeps the model it started with. A new model takes effect from the next day's briefing,
+or from the next config change.
 
 ## Deploy to Posit Connect Cloud
 
@@ -87,7 +105,7 @@ To deploy:
 
 1. In Connect Cloud, deploy a Shiny app from this repository. Set the primary file to
    `app/app.py` and the Python version to 3.13.
-2. Add the secret variable `ANTHROPIC_API_KEY`. You can also add `GITHUB_TOKEN`. A fine-grained
+2. Add the secret variable `OPENROUTER_API_KEY`. You can also add `GITHUB_TOKEN`. A fine-grained
    token with no extra permissions can read public repositories.
 
 The app writes a briefing on the first visit each day. Later visits that day get the stored
@@ -107,7 +125,7 @@ The tests replace the network and the model at their boundaries: a fake `fetch` 
 pi-ai's faux provider for the model. Storage is real SQLite. One test stops a run in the middle
 of a model call and then checks that the next run continues without fetching again. Tests that
 call real services are skipped unless you set their variables: `BRIEFING_LIVE=1` for GitHub, and
-`ANTHROPIC_API_KEY` for the end-to-end briefing.
+`OPENROUTER_API_KEY` for the end-to-end briefing.
 
 | Path | What it holds |
 |---|---|

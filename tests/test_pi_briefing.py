@@ -46,13 +46,27 @@ async def test_a_bad_model_name_is_a_usage_error(tmp_path: Path) -> None:
     assert error.value.usage_error
 
 
-async def test_a_future_date_fails_without_calling_anything(tmp_path: Path) -> None:
+async def test_a_missing_model_key_is_a_usage_error_naming_the_variable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("BRIEFING_MODEL", raising=False)
+    with pytest.raises(BriefingError, match="usually as OPENROUTER_API_KEY") as error:
+        await collect({"repos": [{"name": "a/b"}]}, tmp_path)
+    assert error.value.usage_error
+    assert not (tmp_path / "briefings.sqlite").exists()
+
+
+async def test_a_future_date_fails_without_calling_anything(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-unused")
     with pytest.raises(BriefingError, match="is in the future") as error:
         await collect({"repos": [{"name": "a/b"}]}, tmp_path, date="2999-01-01")
     assert not error.value.usage_error
 
 
-@pytest.mark.skipif(not os.environ.get("ANTHROPIC_API_KEY"), reason="needs ANTHROPIC_API_KEY")
+@pytest.mark.skipif(not os.environ.get("OPENROUTER_API_KEY"), reason="needs OPENROUTER_API_KEY")
 async def test_writes_a_real_briefing_then_serves_it_from_storage(tmp_path: Path) -> None:
     config = {"repos": [{"name": "posit-dev/commons"}], "lookbackHours": 168}
     first = await collect(config, tmp_path)

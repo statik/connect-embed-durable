@@ -53,7 +53,7 @@ wheels = [
 
 [[package]]
 name = "connect-embed-durable"
-version = "0.1.0"
+version = "0.1.1"
 source = { virtual = "." }
 dependencies = [
     { name = "markdown-it-py" },
@@ -73,7 +73,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "markdown-it-py", specifier = "==4.2.0" },
-    { name = "pi-briefing", specifier = "==0.1.0" },
+    { name = "pi-briefing", specifier = "==0.1.1" },
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "shiny", specifier = "==1.8.0" },
 ]
@@ -251,13 +251,13 @@ wheels = [
 
 [[package]]
 name = "pi-briefing"
-version = "0.1.0"
+version = "0.1.1"
 source = { registry = "dist/wheels" }
 wheels = [
-    { path = "pi_briefing-0.1.0-py3-none-manylinux_2_17_aarch64.whl" },
-    { path = "pi_briefing-0.1.0-py3-none-manylinux_2_17_x86_64.whl" },
-    { path = "pi_briefing-0.1.0-py3-none-macosx_13_0_arm64.whl" },
-    { path = "pi_briefing-0.1.0-py3-none-macosx_13_0_x86_64.whl" },
+    { path = "pi_briefing-0.1.1-py3-none-manylinux_2_17_aarch64.whl" },
+    { path = "pi_briefing-0.1.1-py3-none-manylinux_2_17_x86_64.whl" },
+    { path = "pi_briefing-0.1.1-py3-none-macosx_13_0_arm64.whl" },
+    { path = "pi_briefing-0.1.1-py3-none-macosx_13_0_x86_64.whl" },
 ]
 
 [[package]]

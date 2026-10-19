@@ -4,11 +4,11 @@ import { parseArgs } from "node:util";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import { ConfigError, parseConfig } from "./config.ts";
-import { type ModelChoice, runBriefing } from "./run.ts";
+import { type ModelChoice, ModelSetupError, runBriefing } from "./run.ts";
 
 declare const BRIEFING_VERSION: string | undefined;
 const VERSION = typeof BRIEFING_VERSION === "string" ? BRIEFING_VERSION : "dev";
-const DEFAULT_MODEL = "anthropic/claude-sonnet-5-5";
+const DEFAULT_MODEL = "openrouter/anthropic/claude-sonnet-5.5";
 
 const USAGE = `Usage: pi-briefing run --config FILE --state DIR [--date YYYY-MM-DD] [--model PROVIDER/MODEL]
        pi-briefing --version
@@ -19,9 +19,10 @@ Writes a daily briefing about GitHub activity as JSON lines on stdout:
   {"type":"error","message":...}      on failure (exit code 1; 2 for bad arguments or config)
 
 Environment:
-  ANTHROPIC_API_KEY (or another provider's key)  the model provider's credentials
-  GITHUB_TOKEN                                    optional; raises GitHub's rate limit
-  BRIEFING_MODEL                                  default for --model (${DEFAULT_MODEL})`;
+  OPENROUTER_API_KEY  the key for the default provider; other providers read their own,
+                      such as ANTHROPIC_API_KEY for anthropic/...
+  BRIEFING_MODEL      default for --model (${DEFAULT_MODEL})
+  GITHUB_TOKEN        optional; raises GitHub's rate limit`;
 
 /** Wrong arguments or config: the caller must change something before retrying. */
 class UsageError extends Error {
@@ -96,7 +97,8 @@ async function run(argv: string[]): Promise<void> {
 try {
 	await run(process.argv.slice(2));
 } catch (error) {
-	const usage = error instanceof UsageError || error instanceof ConfigError;
+	const usage =
+		error instanceof UsageError || error instanceof ConfigError || error instanceof ModelSetupError;
 	emit({ type: "error", message: error instanceof Error ? error.message : String(error) });
 	process.exitCode = usage ? 2 : 1;
 }

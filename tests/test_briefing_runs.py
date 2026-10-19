@@ -24,7 +24,10 @@ def test_history_is_empty_before_any_run(tmp_path: Path) -> None:
     assert BriefingRuns(tmp_path / "fresh").history() == []
 
 
-async def test_concurrent_failures_each_report_and_release_the_lock(tmp_path: Path) -> None:
+async def test_concurrent_failures_each_report_and_release_the_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-unused")
     runs = BriefingRuns(tmp_path)
     bad = BriefingConfig((Repo("a/b"),), lookback_hours=24)
     future = {"date": "2999-01-01"}
@@ -42,7 +45,7 @@ async def test_progress_messages_reach_the_callback(tmp_path: Path) -> None:
     runs = BriefingRuns(tmp_path)
     seen: list[str] = []
     config = BriefingConfig((Repo("posit-dev/commons"),))
-    env = {"ANTHROPIC_API_KEY": "sk-invalid", "BRIEFING_MODEL": "anthropic/claude-haiku-5-5"}
+    env = {"OPENROUTER_API_KEY": "sk-or-invalid"}
     with pytest.MonkeyPatch.context() as patch:
         for name, value in env.items():
             patch.setenv(name, value)

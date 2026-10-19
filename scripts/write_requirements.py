@@ -4,7 +4,7 @@ Every dependency comes pinned from uv.lock. pi-briefing is not on PyPI, so it co
 wheel URLs, one per Linux architecture, chosen by environment markers:
 
     uv run --no-project python scripts/write_requirements.py \\
-        --wheel-base-url https://github.com/OWNER/REPO/releases/download/v0.1.0
+        --wheel-base-url https://github.com/OWNER/REPO/releases/download/v0.1.1
 """
 
 from __future__ import annotations

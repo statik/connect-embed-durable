@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,7 +13,14 @@ import {
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseConfig } from "./config.ts";
 import { AT, fakeGitHub, issue, pull } from "./fake-github.ts";
-import { briefingWindow, type RunOptions, runBriefing } from "./run.ts";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import {
+	briefingWindow,
+	checkModel,
+	ModelSetupError,
+	type RunOptions,
+	runBriefing,
+} from "./run.ts";
 
 const PULL = "https://github.com/acme/widgets/pull/1";
 const INVENTED = "https://github.com/acme/widgets/pull/404";
@@ -147,5 +155,55 @@ describe("briefingWindow", () => {
 	it("rejects a future day and a malformed date", () => {
 		expect(() => briefingWindow("2026-10-20", 24, now)).toThrow("is in the future");
 		expect(() => briefingWindow("yesterday", 24, now)).toThrow("Invalid date yesterday");
+	});
+});
+
+/** Run with OPENROUTER_API_KEY unset, restoring it after. */
+const withoutKey = async (run: () => Promise<void>) => {
+	const saved = process.env["OPENROUTER_API_KEY"];
+	delete process.env["OPENROUTER_API_KEY"];
+	try {
+		await run();
+	} finally {
+		if (saved !== undefined) process.env["OPENROUTER_API_KEY"] = saved;
+	}
+};
+
+describe("checkModel", () => {
+	const models = builtinModels();
+
+	it("names the key to set when the provider has none", async () => {
+		await withoutKey(async () => {
+			const check = checkModel(models, {
+				provider: "openrouter",
+				modelId: "anthropic/claude-sonnet-5.5",
+			});
+			await expect(check).rejects.toThrow(ModelSetupError);
+			await expect(check).rejects.toThrow(
+				"No OpenRouter API key found. Set it, usually as OPENROUTER_API_KEY.",
+			);
+		});
+	});
+
+	it("rejects an unknown provider and lists the known ones", async () => {
+		await expect(checkModel(models, { provider: "nope", modelId: "x" })).rejects.toThrow(
+			/Unknown model provider "nope"\. Known: .*openrouter/,
+		);
+	});
+
+	it("rejects a model the provider does not have", async () => {
+		await expect(
+			checkModel(models, { provider: "openrouter", modelId: "nope/nope" }),
+		).rejects.toThrow('OpenRouter has no model "nope/nope"');
+	});
+
+	it("stops runBriefing before it opens storage", async () => {
+		await withoutKey(async () => {
+			const choice = { provider: "openrouter", modelId: "anthropic/claude-sonnet-5.5" };
+			await expect(runBriefing({ ...options, models, model: choice })).rejects.toThrow(
+				ModelSetupError,
+			);
+		});
+		expect(existsSync(options.storagePath)).toBe(false);
 	});
 });

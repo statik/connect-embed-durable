@@ -3,7 +3,8 @@
     uv run shiny run app/app.py
 
 Environment:
-    ANTHROPIC_API_KEY   the model provider key the agent uses (see BRIEFING_MODEL for others)
+    OPENROUTER_API_KEY  the key for the agent's default model; see BRIEFING_MODEL
+    BRIEFING_MODEL      provider/model, openrouter/anthropic/claude-sonnet-5.5 by default
     GITHUB_TOKEN        optional; raises GitHub's rate limit for the agent and the setup wizard
     BRIEFING_CONFIG     the config file; app/briefing.yaml by default
     BRIEFING_STATE_DIR  the agent's durable storage and saved results; app/state by default

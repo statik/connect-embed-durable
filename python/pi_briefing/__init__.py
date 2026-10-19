@@ -17,7 +17,7 @@ from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
 from typing import Any
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __all__ = ["BriefingError", "binary_path", "main", "stream_briefing"]
 
 # The agent prints one JSON object per line; a briefing result can be long.
