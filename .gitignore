@@ -1,0 +1,14 @@
+# Build output: rebuilt by `make wheels`, published as GitHub release assets
+agent/dist/
+agent/node_modules/
+dist/
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+# Local run state: durable SQLite storage and saved results
+app/state/
+# Per-machine agent tool settings
+.claude/settings.local.json

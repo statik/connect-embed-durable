@@ -1,0 +1,6 @@
+lookback_hours: 24
+repos:
+  - name: earendil-works/pi
+    focus: changes to packages/durable, the durable agent runtime
+  - name: posit-dev/commons
+    focus: provenance, citations, and evaluation changes

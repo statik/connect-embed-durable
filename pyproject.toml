@@ -1,0 +1,52 @@
+[project]
+name = "connect-embed-durable"
+version = "0.1.0"
+description = "A pi-durable daily GitHub briefing agent, configured from Shiny, deployable to Posit Connect Cloud"
+license = "MIT"
+requires-python = ">=3.13"
+dependencies = [
+    "markdown-it-py==4.2.0",
+    "pi-briefing==0.1.0",
+    "pyyaml==6.0.3",
+    "shiny==1.8.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "ruff==0.17.1",
+    "ty==0.0.89",
+]
+
+[tool.uv]
+package = false
+# The platform wheels `wheel/build_wheels.py` writes; uv picks the one for this machine.
+find-links = ["dist/wheels"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["app"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+src = ["app", "python", "wheel", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PL", "C90"]
+ignore = ["PLR2004"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-args = 5
+
+[tool.ty.environment]
+extra-paths = ["app", "python"]
+
+[tool.ruff.lint.per-file-ignores]
+# mccabe adds each nested reactive closure to its enclosing *_server function. The closures are
+# small on their own; this is how Shiny servers are written.
+"app/app.py" = ["C901"]
