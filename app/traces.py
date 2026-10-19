@@ -15,7 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-AGENTS = ("pi-durable", "commons")
+# Display order on every page: commons first, as on the Ask page, where its chat box is.
+AGENTS = ("commons", "pi-durable")
 
 
 @dataclass(frozen=True)

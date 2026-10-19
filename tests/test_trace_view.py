@@ -1,6 +1,8 @@
 from pathlib import Path
 
+from ask_page import ASK_PANEL
 from briefing_page import status_line
+from observe_page import TRACE_PANEL
 from trace_view import trace_panel, usage_summary
 from traces import TraceStore
 
@@ -50,3 +52,10 @@ def test_status_line_says_what_the_running_briefing_has_done(tmp_path: Path) -> 
     line = status_line(trace)
     assert line.startswith("model call 1 · fetched a/b · 100 in")
     assert line.endswith("$0.0200")
+
+
+def test_both_agents_appear_in_the_same_order_on_every_page() -> None:
+    ask = str(ASK_PANEL.content)
+    trace = str(TRACE_PANEL.content)
+    assert ask.index("commons") < ask.index("pi-durable")
+    assert trace.index("trace_pick_commons") < trace.index("trace_pick_pi_durable")
