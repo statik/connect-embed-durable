@@ -21,26 +21,48 @@ from trace_view import usage_text
 from traces import Usage
 
 _GREETING = (
-    "I answer questions about your saved briefings. For example: Who merged the most pull "
-    "requests? Which repository had the most new issues in the latest briefing?"
+    "Ask a question here and both agents answer it: me (commons) in this column, and "
+    "pi-durable in the column on the right. For example: Who merged the most pull requests? "
+    "Which repository had the most new issues in the latest briefing?"
 )
+
+
+def _agent_header(name: str, source: ui.TagChild) -> ui.CardItem:
+    return ui.card_header(
+        ui.tags.strong(name),
+        ui.div(source, class_="small text-muted fw-normal"),
+    )
+
 
 ASK_PANEL = ui.nav_panel(
     "Ask",
-    ui.p(
-        "Ask a question in the box on the left. Both agents answer it: commons from all saved "
-        "briefings, pi-durable as a follow-up in the briefing shown on the Briefing page. "
-        "The Trace page shows each agent's work as it happens.",
-        class_="text-muted",
+    ui.div(
+        ui.tags.strong("One question, two agents. "),
+        "Type in the box at the bottom of the commons column. Each question goes to both "
+        "agents, and "
+        "their answers appear side by side. The Trace page shows each agent's work as it "
+        "happens.",
+        class_="alert alert-primary py-2",
     ),
     ui.layout_columns(
         ui.card(
-            ui.card_header("commons"),
+            _agent_header("commons", "Answers from every saved briefing"),
             ui.output_ui("commons_notes"),
-            shinychat.chat_ui("ask_commons"),
+            shinychat.chat_ui(
+                "ask_commons",
+                placeholder="Ask both agents a question…",
+                footer=ui.div(
+                    "Each question goes to commons and pi-durable.",
+                    class_="small text-muted text-center",
+                ),
+            ),
             full_screen=True,
         ),
-        ui.card(ui.card_header("pi-durable"), ui.output_ui("durable_answers"), full_screen=True),
+        ui.card(
+            _agent_header("pi-durable", ui.output_text("durable_source", inline=True)),
+            ui.output_ui("durable_answers"),
+            full_screen=True,
+        ),
     ),
 )
 
@@ -106,13 +128,24 @@ def ask_server(
             return ui.div(message, class_="small text-warning")
         return None
 
+    @render.text
+    def durable_source() -> str:
+        current = shown.get()
+        if current is None:
+            return "Answers inside a briefing's conversation; write or pick a briefing first"
+        return f"Answers inside the conversation of the {current['date']} briefing"
+
     @render.ui
     def durable_answers() -> ui.TagChild:
         asked.get()
         if any(entry.get("pending") for entry in entries):
             reactive.invalidate_later(0.5)
         if not entries:
-            return ui.p("Answers appear here.", class_="text-muted")
+            return ui.p(
+                "\u2190 Ask in the box on the left. Every question you ask there is also sent "
+                "here, and pi-durable's answer appears in this column.",
+                class_="text-muted",
+            )
         return ui.TagList(*[_answer(entry, state) for entry in entries])
 
 
