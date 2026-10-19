@@ -26,13 +26,19 @@ def safe_markdown(text: str) -> ui.HTML:
     return ui.HTML(_MARKDOWN.render(text))
 
 
+def _verified_text(cited: int) -> str:
+    if cited == 0:
+        return "The answer links no pull requests, issues, or releases."
+    items = "item" if cited == 1 else "items"
+    return f"All {cited} linked {items} came from GitHub data fetched for this briefing."
+
+
 def provenance_marker(verification: dict[str, Any]) -> ui.Tag:
     """The commons-style marker: verified only when every item link came from GitHub data."""
     if verification["outcome"] == "verified":
         return ui.div(
             ui.tags.strong("Verified. "),
-            f"Every one of the {verification['cited']} linked items came from GitHub data "
-            "fetched for this briefing.",
+            _verified_text(verification["cited"]),
             class_="alert alert-success py-2 mb-3",
         )
     links = [ui.tags.li(ui.tags.code(url)) for url in verification["unverified"]]
@@ -74,7 +80,7 @@ def activity_table(activity: dict[str, Any]) -> ui.Tag:
 def run_details(result: dict[str, Any]) -> str:
     usage = result["usage"]
     origin = "Served from durable storage" if result["resumed"] else "New run"
-    tokens = usage["input"] + usage["output"]
+    tokens = sum(usage.get(kind, 0) for kind in ("input", "cacheRead", "cacheWrite", "output"))
     return (
         f"{origin} · {result['window']['since'][:16]}Z to {result['window']['until'][:16]}Z · "
         f"{result['model']} · {tokens:,} tokens · ${usage['costUsd']:.4f}"

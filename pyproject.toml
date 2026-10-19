@@ -1,14 +1,19 @@
 [project]
 name = "connect-embed-durable"
-version = "0.1.1"
+version = "0.2.0"
 description = "A pi-durable daily GitHub briefing agent, configured from Shiny, deployable to Posit Connect Cloud"
 license = "MIT"
 requires-python = ">=3.13"
 dependencies = [
+    "chatlas==0.23.0",
+    "commons[shiny]==0.1.0b2",
     "markdown-it-py==4.2.0",
-    "pi-briefing==0.1.1",
+    "openai==3.35.1",
+    "pandas==3.0.6",
+    "pi-briefing==0.2.0",
     "pyyaml==6.0.3",
     "shiny==1.8.0",
+    "shinychat==0.7.2",
 ]
 
 [dependency-groups]
@@ -50,4 +55,4 @@ extra-paths = ["app", "python"]
 [tool.ruff.lint.per-file-ignores]
 # mccabe adds each nested reactive closure to its enclosing *_server function. The closures are
 # small on their own; this is how Shiny servers are written.
-"app/app.py" = ["C901"]
+"app/*_page.py" = ["C901"]

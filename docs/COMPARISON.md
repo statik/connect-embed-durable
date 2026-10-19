@@ -25,7 +25,8 @@ The two projects are at different layers, so they are not competitors.
 | Duplicate requests | `requestId` returns the existing submission | No request IDs on submissions |
 | Trust | Not in scope | A/B/C provenance tags, verified citations, provenance markers in the UI |
 | Tools | TypeBox schemas, a replay policy, nested calls, a code mode sandbox with deterministic replay | Measures with injected data sources, SQL with a guard, R and Python sandboxes |
-| Observability | Watches and agent events derived from commits | OpenTelemetry GenAI spans that both languages can read |
+| Observability | Watches and agent events derived from commits, live | OpenTelemetry GenAI spans that both languages can read; no live event API for hosts |
+| Usage and cost | Tokens and cost per model call, totals per conversation in `pi.usage` | chatlas token counts per turn; `get_cost()` uses chatlas' own price table |
 | Cross-language agreement | A prose specification and a storage conformance suite | Executable fixtures in `tests/shared/` that both test suites run |
 | UI | None; a host renders the committed view | shinychat components and provenance markers |
 
@@ -97,6 +98,49 @@ submission with its own request ID, so a crash during a repair does not send it 
    run still resumes (`attemptId` in `agent/src/run.ts`). A documented pattern, or an option on
    `submit()`, would save each app from rebuilding this.
 
+## What observing both agents showed
+
+The app shows both agents' work live, in one event vocabulary
+([`agent/src/trace.ts`](../agent/src/trace.ts) and [`app/traces.py`](../app/traces.py)), and
+prices both from one catalog. Building that showed these differences.
+
+1. **pi-durable is observable by design; commons is not yet.** pi-durable's `watchEvents` gives
+   turns, streamed text and thinking, tool starts and ends with results, retries, and usage, all
+   derived from commits. For commons, the app subclasses `Commons` and copies `stream_async`'s
+   chunks into the trace (`ObservedCommons` in [`app/ask_agent.py`](../app/ask_agent.py)).
+   chatlas' `on_tool_request` and `on_tool_result` hooks cover tool calls only.
+2. **commons' provenance outcome is only HTML.** The outcome reaches a host as a
+   `<shiny-aside label="Trusted">` chunk in the stream, so the trace reads it with a regular
+   expression. Tool results carry the A/B/C tag in `extra["commons_tag"]`, but there is no
+   structured outcome for the answer. **Idea for commons:** put the answer's provenance outcome
+   and citation decision on the turn, or in an event, so hosts and traces need not parse HTML.
+3. **pi-durable's text deltas are not the whole text.** Partial text is committed on a timer
+   (every 100 ms by default). The first chunk of a message arrives in `message_start`, and the
+   last chunk only in the final message of `message_end`. A consumer that only joins
+   `text_delta` events loses both ends of every message, and short answers have no deltas at
+   all. The live trace takes all three into account, and a test guards it. **Idea for
+   pi-durable:** document this in the agent events section, or emit deltas that add up to the
+   whole text.
+4. **Usage for one request is work in pi-durable.** `pi.usage` holds totals for a conversation.
+   A follow-up question in the briefing's conversation needs its own spend, so the runner takes
+   the difference before and after it. It then freezes that number in the briefing document, so
+   that asking again with the same request ID reports the same spend, not zero. **Idea for
+   pi-durable:** record usage on each submission.
+5. **One price catalog matters.** chatlas' `get_cost()` reports $0.00 for
+   `anthropic/claude-sonnet-5.5` on OpenRouter, because its price table does not have it.
+   pi-ai's catalog does. The app asks the agent for the catalog price (`pi-briefing price`) and
+   prices commons' tokens with it, so the two agents' costs compare. **Idea for commons:** take
+   a price table from the host, or use a maintained catalog.
+6. **The two agents answer different questions well.** commons queries structured data from
+   every saved briefing, so questions that count or rank across days go to trusted measures. The
+   pi-durable follow-up has one briefing's raw tool output in its context, so it can talk about
+   items the measures do not cover, but only for that briefing. The Ask page puts them side by
+   side so the difference is visible. It is a design expectation, not yet a measured result.
+7. **commons needs its sandbox when it starts.** `Commons()` builds its Python sandbox at
+   construction and raises if the host cannot provide one. It works in a default Docker
+   container. If a host forbids user namespaces, the Ask page shows commons' error and the
+   pi-durable agent still answers.
+
 ## Small frictions found while building
 
 - **Faux tool calls stop the run.** A faux assistant message with a tool call ends the run unless
@@ -106,6 +150,9 @@ submission with its own request ID, so a crash during a repair does not send it 
 - **The time goes in the user message.** Sections are cached between requests, so a section that
   shows the date would change every day and defeat the prompt cache. The date and window go in
   the user message instead.
+- **Faux models finish too fast to stream.** The faux provider answers at once, so no partial
+  text is committed and no `text_delta` events arrive. To test streaming, pass
+  `fauxProvider({ tokensPerSecond })`.
 - **Size.** The Bun executable is about 96 MB on Linux and 66 MB on macOS. The compressed wheels
   are 24 to 36 MB. That is acceptable for Connect Cloud, but too large to commit to git, so the
   wheels go in GitHub releases.

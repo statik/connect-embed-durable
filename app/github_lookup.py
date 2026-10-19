@@ -1,4 +1,7 @@
-"""Look up public repositories on GitHub, so the setup wizard can check what the user types."""
+"""Look up repositories on GitHub, so the setup wizard can check what the user types.
+
+With GITHUB_TOKEN set, private repositories the token can read are found too.
+"""
 
 from __future__ import annotations
 
@@ -26,6 +29,7 @@ class RepoInfo:
     stars: int
     pushed_at: str
     archived: bool
+    private: bool
     url: str
 
     @classmethod
@@ -36,6 +40,7 @@ class RepoInfo:
             stars=int(data.get("stargazers_count") or 0),
             pushed_at=(data.get("pushed_at") or "")[:10],
             archived=bool(data.get("archived")),
+            private=bool(data.get("private")),
             url=data["html_url"],
         )
 
@@ -51,9 +56,13 @@ def _get(path: str, token: str | None) -> Any:
             return json.load(response)
     except urllib.error.HTTPError as error:
         if error.code == 404:
-            raise GitHubLookupError(
-                "GitHub has no public repository or account by that name"
-            ) from error
+            message = (
+                "GITHUB_TOKEN cannot read a repository or account by that name."
+                if token
+                else "GitHub has no public repository or account by that name. "
+                "Set GITHUB_TOKEN to use private repositories."
+            )
+            raise GitHubLookupError(message) from error
         if error.code in (403, 429) and error.headers.get("x-ratelimit-remaining") == "0":
             hint = "" if token else " Set GITHUB_TOKEN to raise the limit."
             raise GitHubLookupError(f"GitHub's rate limit is used up.{hint}") from error
@@ -63,15 +72,24 @@ def _get(path: str, token: str | None) -> Any:
 
 
 async def lookup_repo(name: str, token: str | None) -> RepoInfo:
-    """One public repository, or `GitHubLookupError` saying why it cannot be used."""
+    """One repository the token (or anyone) can read, or `GitHubLookupError` saying why not."""
     data = await asyncio.to_thread(_get, f"/repos/{name}", token)
-    if data.get("private"):
-        raise GitHubLookupError(f"{name} is private; the briefing covers public repositories only")
     return RepoInfo.from_api(data)
 
 
 async def list_owner_repos(owner: str, token: str | None, limit: int = 30) -> list[RepoInfo]:
-    """An organization's or user's public, unarchived repositories, most recently pushed first."""
-    path = f"/users/{owner}/repos?type=owner&sort=pushed&direction=desc&per_page={limit}"
-    data = await asyncio.to_thread(_get, path, token)
+    """An owner's unarchived repositories, most recently pushed first.
+
+    With a token, an organization's private repositories the token can read are included. A
+    user's private repositories are not listed by GitHub's API; add those by name.
+    """
+    query = f"sort=pushed&direction=desc&per_page={limit}"
+    data = None
+    if token:
+        try:
+            data = await asyncio.to_thread(_get, f"/orgs/{owner}/repos?type=all&{query}", token)
+        except GitHubLookupError:
+            data = None  # Not an organization; fall back to the user listing below.
+    if data is None:
+        data = await asyncio.to_thread(_get, f"/users/{owner}/repos?type=owner&{query}", token)
     return [RepoInfo.from_api(item) for item in data if not item.get("archived")]

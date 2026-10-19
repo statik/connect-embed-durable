@@ -8,13 +8,18 @@ export interface ActivityWindow {
 
 export type ItemKind = "pr_merged" | "pr_opened" | "issue_opened" | "issue_closed" | "release";
 
-export interface ActivityItem {
+/** One thing that happened. A type alias, not an interface, so durable documents can hold it. */
+export type ActivityItem = {
+	readonly repo: string;
 	readonly kind: ItemKind;
+	/** The pull request or issue number; null for a release. */
+	readonly number: number | null;
 	readonly title: string;
 	readonly url: string;
 	readonly author: string;
 	readonly at: string;
-}
+	labels: string[];
+};
 
 export interface RepoActivity {
 	readonly repo: string;
@@ -44,6 +49,8 @@ interface RawUser {
 	readonly login?: string;
 }
 interface RawPull {
+	readonly number: number;
+	readonly labels?: readonly { readonly name: string }[];
 	readonly title: string;
 	readonly html_url: string;
 	readonly user: RawUser | null;
@@ -65,7 +72,11 @@ interface RawRelease {
 }
 
 function explainFailure(repo: string, response: Response, hasToken: boolean): string {
-	if (response.status === 404) return `${repo} was not found, or it is not public`;
+	if (response.status === 404) {
+		return hasToken
+			? `${repo} was not found, or GITHUB_TOKEN cannot read it`
+			: `${repo} was not found, or it is private. Set GITHUB_TOKEN to read private repositories.`;
+	}
 	const remaining = response.headers.get("x-ratelimit-remaining");
 	if ((response.status === 403 || response.status === 429) && remaining === "0") {
 		const reset = Number(response.headers.get("x-ratelimit-reset") ?? "0") * 1000;
@@ -99,24 +110,35 @@ function login(user: RawUser | null): string {
 	return user?.login ?? "ghost";
 }
 
-function pullItems(pulls: readonly RawPull[], window: ActivityWindow): ActivityItem[] {
+function shared(repo: string, raw: RawPull | RawIssue) {
+	return {
+		repo,
+		number: raw.number,
+		title: raw.title,
+		url: raw.html_url,
+		author: login(raw.user),
+		labels: (raw.labels ?? []).map((label) => label.name),
+	};
+}
+
+function pullItems(repo: string, pulls: readonly RawPull[], window: ActivityWindow) {
 	const items: ActivityItem[] = [];
 	for (const pull of pulls) {
-		const base = { title: pull.title, url: pull.html_url, author: login(pull.user) };
-		if (within(pull.merged_at, window))
+		const base = shared(repo, pull);
+		if (within(pull.merged_at, window)) {
 			items.push({ ...base, kind: "pr_merged", at: pull.merged_at });
-		else if (within(pull.created_at, window)) {
+		} else if (within(pull.created_at, window)) {
 			items.push({ ...base, kind: "pr_opened", at: pull.created_at });
 		}
 	}
 	return items;
 }
 
-function issueItems(issues: readonly RawIssue[], window: ActivityWindow): ActivityItem[] {
+function issueItems(repo: string, issues: readonly RawIssue[], window: ActivityWindow) {
 	const items: ActivityItem[] = [];
 	for (const issue of issues) {
 		if (issue.pull_request !== undefined) continue;
-		const base = { title: issue.title, url: issue.html_url, author: login(issue.user) };
+		const base = shared(repo, issue);
 		if (within(issue.created_at, window)) {
 			items.push({ ...base, kind: "issue_opened", at: issue.created_at });
 		}
@@ -127,11 +149,14 @@ function issueItems(issues: readonly RawIssue[], window: ActivityWindow): Activi
 	return items;
 }
 
-function releaseItems(releases: readonly RawRelease[], window: ActivityWindow): ActivityItem[] {
+function releaseItems(repo: string, releases: readonly RawRelease[], window: ActivityWindow) {
 	return releases
 		.filter((r) => !r.draft && within(r.published_at, window))
 		.map((r) => ({
+			repo,
 			kind: "release" as const,
+			number: null,
+			labels: [],
 			title: r.name ?? r.tag_name,
 			url: r.html_url,
 			author: login(r.author),
@@ -139,7 +164,7 @@ function releaseItems(releases: readonly RawRelease[], window: ActivityWindow): 
 		}));
 }
 
-/** Everything that happened in one public repository during `window`, from four REST calls. */
+/** Everything that happened in one repository during `window`, from four REST calls. */
 export async function fetchRepoActivity(
 	client: GitHubClient,
 	repo: string,
@@ -167,9 +192,9 @@ export async function fetchRepoActivity(
 		issues.length === PAGE_SIZE ||
 		commits.length === PAGE_SIZE;
 	const items = [
-		...pullItems(pulls, window),
-		...issueItems(issues, window),
-		...releaseItems(releases, window),
+		...pullItems(repo, pulls, window),
+		...issueItems(repo, issues, window),
+		...releaseItems(repo, releases, window),
 	].toSorted((a, b) => a.at.localeCompare(b.at));
 	return { repo, window, items, commits: commits.length, truncated };
 }

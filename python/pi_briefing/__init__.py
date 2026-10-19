@@ -11,14 +11,22 @@ import asyncio
 import json
 import os
 import stat
+import subprocess
 import sys
 import tempfile
 from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
 from typing import Any
 
-__version__ = "0.1.1"
-__all__ = ["BriefingError", "binary_path", "main", "stream_briefing"]
+__version__ = "0.2.0"
+__all__ = [
+    "BriefingError",
+    "binary_path",
+    "main",
+    "model_price",
+    "stream_ask",
+    "stream_briefing",
+]
 
 # The agent prints one JSON object per line; a briefing result can be long.
 _LINE_LIMIT = 16 * 1024 * 1024
@@ -26,7 +34,7 @@ _USAGE_EXIT_CODE = 2
 
 
 class BriefingError(RuntimeError):
-    """The agent failed. `usage_error` means the config or arguments must change first."""
+    """The agent failed. `usage_error` means something must change before a retry can work."""
 
     def __init__(self, message: str, exit_code: int) -> None:
         super().__init__(message)
@@ -54,17 +62,6 @@ def binary_path() -> Path:
     return binary
 
 
-def _arguments(
-    config_path: Path, state_dir: Path, date: str | None, model: str | None
-) -> list[str]:
-    args = [str(binary_path()), "run", "--config", str(config_path), "--state", str(state_dir)]
-    if date is not None:
-        args += ["--date", date]
-    if model is not None:
-        args += ["--model", model]
-    return args
-
-
 async def stream_briefing(
     config: Mapping[str, Any],
     *,
@@ -74,7 +71,7 @@ async def stream_briefing(
 ) -> AsyncIterator[dict[str, Any]]:
     """Write one briefing, yielding the agent's events as they arrive.
 
-    Progress events look like `{"type": "progress", "message": ...}`. The last event is
+    Trace events look like `{"type": "trace", "event": {"kind": ...}}`. The last event is
     `{"type": "result", ...}`. The run is durable: if it is interrupted, calling this again with
     the same config and date resumes it, and a finished briefing comes back without model calls.
     Only one run may use a `state_dir` at a time.
@@ -88,23 +85,63 @@ async def stream_briefing(
     Raises:
         BriefingError: The agent reported an error, or exited without a result.
     """
-    state_dir.mkdir(parents=True, exist_ok=True)
+    options = [] if date is None else ["--date", date]
+    options += [] if model is None else ["--model", model]
     with tempfile.TemporaryDirectory(prefix="briefing-config-") as scratch:
         config_path = Path(scratch) / "config.json"
         config_path.write_text(json.dumps(dict(config)))
-        process = await asyncio.create_subprocess_exec(
-            *_arguments(config_path, state_dir, date, model),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            limit=_LINE_LIMIT,
-        )
-        try:
-            async for event in _events(process):
-                yield event
-        finally:
-            if process.returncode is None:
-                process.terminate()
-                await process.wait()
+        async for event in _stream(["run", "--config", str(config_path), *options], state_dir):
+            yield event
+
+
+async def stream_ask(
+    *, state_dir: Path, key: str, question: str, request_id: str
+) -> AsyncIterator[dict[str, Any]]:
+    """Ask a follow-up question in a briefing's own conversation, yielding the agent's events.
+
+    `key` is the briefing's key, from its result. Asking again with the same `request_id`
+    returns the stored answer. Events are as for `stream_briefing`.
+
+    Raises:
+        BriefingError: The agent reported an error; `usage_error` when there is no such briefing.
+    """
+    options = ["--key", key, "--question", question, "--request-id", request_id]
+    async for event in _stream(["ask", *options], state_dir):
+        yield event
+
+
+def model_price(model: str | None = None) -> dict[str, float]:
+    """The model's catalog price in USD per million tokens: input, output, cacheRead, cacheWrite.
+
+    Raises:
+        BriefingError: The model is not in the catalog.
+    """
+    command = [str(binary_path()), "price", *([] if model is None else ["--model", model])]
+    done = subprocess.run(command, capture_output=True, text=True, check=False)
+    event = json.loads(done.stdout.splitlines()[-1]) if done.stdout else {}
+    if done.returncode != 0 or event.get("type") != "price":
+        raise BriefingError(event.get("message", done.stderr.strip()), done.returncode)
+    return event["perMillionUsd"]
+
+
+async def _stream(args: list[str], state_dir: Path) -> AsyncIterator[dict[str, Any]]:
+    state_dir.mkdir(parents=True, exist_ok=True)
+    process = await asyncio.create_subprocess_exec(
+        str(binary_path()),
+        *args,
+        "--state",
+        str(state_dir),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        limit=_LINE_LIMIT,
+    )
+    try:
+        async for event in _events(process):
+            yield event
+    finally:
+        if process.returncode is None:
+            process.terminate()
+            await process.wait()
 
 
 async def _events(process: asyncio.subprocess.Process) -> AsyncIterator[dict[str, Any]]:

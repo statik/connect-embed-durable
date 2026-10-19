@@ -31,10 +31,14 @@ def github(monkeypatch: pytest.MonkeyPatch):
     return state
 
 
-async def test_a_missing_repository_says_so(github: dict) -> None:
+async def test_a_missing_repository_says_so_and_what_a_token_would_change(github: dict) -> None:
     github["answer"] = http_error(404)
-    with pytest.raises(GitHubLookupError, match="no public repository"):
+    with pytest.raises(
+        GitHubLookupError, match=r"no public repository or account by that name\. Set GITHUB_TOKEN"
+    ):
         await lookup_repo("acme/nope", None)
+    with pytest.raises(GitHubLookupError, match="GITHUB_TOKEN cannot read"):
+        await lookup_repo("acme/nope", "token")
 
 
 async def test_an_exhausted_rate_limit_suggests_a_token(github: dict) -> None:
@@ -49,10 +53,20 @@ async def test_an_unreachable_github_says_so(github: dict) -> None:
         await lookup_repo("acme/widgets", None)
 
 
-async def test_a_private_repository_is_refused(github: dict) -> None:
+async def test_a_private_repository_the_token_can_read_is_accepted(github: dict) -> None:
     github["answer"] = '{"full_name": "acme/secret", "html_url": "u", "private": true}'
-    with pytest.raises(GitHubLookupError, match="public repositories only"):
-        await lookup_repo("acme/secret", "token")
+    info = await lookup_repo("acme/secret", "token")
+    assert info.private
+    assert github["requests"][0].get_header("Authorization") == "Bearer token"
+
+
+async def test_browsing_with_a_token_lists_an_organizations_private_repositories(
+    github: dict,
+) -> None:
+    github["answer"] = '[{"full_name": "acme/secret", "html_url": "u", "private": true}]'
+    repos = await list_owner_repos("acme", "token")
+    assert [r.name for r in repos] == ["acme/secret"]
+    assert "/orgs/acme/repos?type=all" in github["requests"][0].full_url
 
 
 async def test_requests_carry_no_personal_identifiers(github: dict) -> None:

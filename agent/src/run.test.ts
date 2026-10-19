@@ -11,16 +11,19 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { beforeEach, describe, expect, it } from "vitest";
-import { parseConfig } from "./config.ts";
+import { briefingKey, parseConfig } from "./config.ts";
 import { AT, fakeGitHub, issue, pull } from "./fake-github.ts";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import {
+	askBriefing,
 	briefingWindow,
 	checkModel,
 	ModelSetupError,
+	NoBriefingError,
 	type RunOptions,
 	runBriefing,
 } from "./run.ts";
+import type { TraceEvent } from "./trace.ts";
 
 const PULL = "https://github.com/acme/widgets/pull/1";
 const INVENTED = "https://github.com/acme/widgets/pull/404";
@@ -68,8 +71,8 @@ function respond(...steps: FauxResponseStep[]) {
 describe("runBriefing", () => {
 	it("fetches each repository through the tool and verifies the answer's links", async () => {
 		respond(toolTurn(), answer(`## acme/widgets\n- Merged [PR 1](${PULL})`));
-		const progress: string[] = [];
-		const result = await runBriefing({ ...options, onProgress: (m) => progress.push(m) });
+		const trace: TraceEvent[] = [];
+		const result = await runBriefing({ ...options, onTrace: (e) => trace.push(e) });
 		expect(result).toMatchObject({
 			date: "2026-10-18",
 			window: { since: "2026-10-17T20:00:00.000Z", until: "2026-10-18T20:00:00.000Z" },
@@ -79,7 +82,32 @@ describe("runBriefing", () => {
 			resumed: false,
 		});
 		expect(result.markdown).toContain(PULL);
-		expect(progress).toContain("Fetching acme/widgets");
+		expect(result.items).toEqual([
+			expect.objectContaining({
+				repo: "acme/widgets",
+				kind: "pr_merged",
+				number: 1,
+				labels: ["enhancement"],
+			}),
+			expect.objectContaining({
+				repo: "acme/widgets",
+				kind: "issue_opened",
+				number: 2,
+				labels: [],
+			}),
+		]);
+		expect(trace).toContainEqual(
+			expect.objectContaining({
+				kind: "tool_start",
+				name: "repo_activity",
+				args: { repo: "acme/widgets" },
+			}),
+		);
+		expect(trace).toContainEqual(
+			expect.objectContaining({ kind: "tool_end", name: "repo_activity", isError: false }),
+		);
+		expect(trace).toContainEqual({ kind: "note", message: "Links: verified (1 cited)" });
+		expect(trace.filter((e) => e.kind === "message_end")).toHaveLength(2);
 		expect(github.requests).toHaveLength(4);
 	});
 
@@ -114,7 +142,7 @@ describe("runBriefing", () => {
 
 	it("retries with a fresh request after a run the model failed", async () => {
 		respond(failure(), failure(), failure(), failure());
-		await expect(runBriefing(options)).rejects.toThrow("The briefing was not answered");
+		await expect(runBriefing(options)).rejects.toThrow("No answer (model_error)");
 		respond(toolTurn(), answer(`Merged ${PULL}`));
 		const result = await runBriefing(options);
 		expect(result).toMatchObject({ resumed: true, verification: { outcome: "verified" } });
@@ -205,5 +233,69 @@ describe("checkModel", () => {
 			);
 		});
 		expect(existsSync(options.storagePath)).toBe(false);
+	});
+});
+
+describe("askBriefing", () => {
+	const key = briefingKey("2026-10-18", config);
+	const question = { key, question: "What merged?", requestId: "q1" };
+
+	it("answers in the briefing's conversation, with its own spend and checked links", async () => {
+		respond(toolTurn(), answer(`Merged ${PULL}`), answer(`[PR 1](${PULL}) merged.`));
+		const briefing = await runBriefing(options);
+		const trace: TraceEvent[] = [];
+		const reply = await askBriefing({ ...options, ...question, onTrace: (e) => trace.push(e) });
+		expect(reply).toMatchObject({
+			question: "What merged?",
+			model: "faux/faux-1",
+			markdown: `[PR 1](${PULL}) merged.`,
+			verification: { outcome: "verified", cited: 1 },
+		});
+		expect(reply.usage.output).toBeGreaterThan(0);
+		expect(reply.usage.output).toBeLessThan(briefing.usage.output);
+		expect(trace).toContainEqual(
+			expect.objectContaining({ kind: "message_end", text: `[PR 1](${PULL}) merged.` }),
+		);
+		expect(github.requests).toHaveLength(4);
+	});
+
+	it("returns the stored answer when asked again with the same request ID", async () => {
+		respond(toolTurn(), answer(`Merged ${PULL}`), answer("Just PR 1."));
+		await runBriefing(options);
+		const first = await askBriefing({ ...options, ...question });
+		const calls = faux.state.callCount;
+		expect(await askBriefing({ ...options, ...question })).toEqual(first);
+		expect(faux.state.callCount).toBe(calls);
+	});
+
+	it("keeps the briefing's own spend apart from follow-up questions", async () => {
+		respond(toolTurn(), answer(`Merged ${PULL}`), answer("Just PR 1."));
+		const first = await runBriefing(options);
+		await askBriefing({ ...options, ...question });
+		expect((await runBriefing(options)).usage).toEqual(first.usage);
+	});
+
+	it("says when there is no briefing to ask about", async () => {
+		await expect(askBriefing({ ...options, ...question })).rejects.toThrow(NoBriefingError);
+	});
+});
+
+describe("live trace", () => {
+	it("streams the model's text while it writes", async () => {
+		const slow = fauxProvider({ tokensPerSecond: 40 });
+		const models = createModels();
+		models.setProvider(slow.provider);
+		const words = Array.from({ length: 30 }, (_, i) => `word${i}`).join(" ");
+		slow.setResponses([toolTurn(), answer(`Merged ${PULL}. ${words}`)]);
+		const trace: TraceEvent[] = [];
+		await runBriefing({ ...options, models, onTrace: (e) => trace.push(e) });
+		const deltas = trace.filter((e) => e.kind === "text");
+		expect(deltas.length).toBeGreaterThan(1);
+		const streamed = deltas.map((e) => (e.kind === "text" ? e.delta : "")).join("");
+		const full = `Merged ${PULL}. ${words}`;
+		// Partials are committed on a timer, so the stream is a prefix; the end has the whole text.
+		expect(full.startsWith(streamed)).toBe(true);
+		expect(streamed.length).toBeGreaterThan(full.length / 2);
+		expect(trace).toContainEqual(expect.objectContaining({ kind: "message_end", text: full }));
 	});
 });

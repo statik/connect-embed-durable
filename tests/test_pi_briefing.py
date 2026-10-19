@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 import pi_briefing
-from pi_briefing import BriefingError, binary_path, stream_briefing
+from pi_briefing import BriefingError, binary_path, model_price, stream_ask, stream_briefing
 
 
 async def collect(config: dict, state_dir: Path, **options: str) -> list[dict]:
@@ -66,6 +66,27 @@ async def test_a_future_date_fails_without_calling_anything(
     assert not error.value.usage_error
 
 
+def test_model_price_is_the_catalog_price_per_million_tokens() -> None:
+    assert model_price("openrouter/anthropic/claude-sonnet-5.5") == {
+        "input": 2,
+        "output": 10,
+        "cacheRead": 0.1,
+        "cacheWrite": 2.5,
+    }
+    with pytest.raises(BriefingError, match="No model openrouter/no/such") as error:
+        model_price("openrouter/no/such")
+    assert error.value.usage_error
+
+
+async def test_asking_without_a_briefing_is_a_usage_error(tmp_path: Path) -> None:
+    events = stream_ask(
+        state_dir=tmp_path, key="briefing:2026-10-18:x", question="q", request_id="r"
+    )
+    with pytest.raises(BriefingError, match="There is no briefing") as error:
+        _ = [event async for event in events]
+    assert error.value.usage_error
+
+
 @pytest.mark.skipif(not os.environ.get("OPENROUTER_API_KEY"), reason="needs OPENROUTER_API_KEY")
 async def test_writes_a_real_briefing_then_serves_it_from_storage(tmp_path: Path) -> None:
     config = {"repos": [{"name": "posit-dev/commons"}], "lookbackHours": 168}
@@ -74,7 +95,9 @@ async def test_writes_a_real_briefing_then_serves_it_from_storage(tmp_path: Path
     assert result["type"] == "result"
     assert result["resumed"] is False
     assert "posit-dev/commons" in result["markdown"]
-    assert any(e["type"] == "progress" for e in first)
+    assert any(e["type"] == "trace" and e["event"]["kind"] == "tool_start" for e in first)
+    assert result["items"]
+    assert result["usage"]["output"] > 0
 
     again = (await collect(config, tmp_path))[-1]
     assert again["resumed"] is True

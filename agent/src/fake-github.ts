@@ -42,6 +42,8 @@ const BEFORE = "2026-10-17T12:00:00Z";
 
 export function pull(number: number, fields: { merged?: boolean; created?: string } = {}) {
 	return {
+		number,
+		labels: [{ name: "enhancement" }],
 		title: `PR ${number}`,
 		html_url: `https://github.com/acme/widgets/pull/${number}`,
 		user: { login: "ada" },
@@ -53,6 +55,8 @@ export function pull(number: number, fields: { merged?: boolean; created?: strin
 
 export function issue(number: number, fields: { created?: string; closed?: string } = {}) {
 	return {
+		number,
+		labels: [],
 		title: `Issue ${number}`,
 		html_url: `https://github.com/acme/widgets/issues/${number}`,
 		user: { login: "grace" },

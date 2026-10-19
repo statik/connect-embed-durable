@@ -112,15 +112,35 @@ def from_mapping(data: object) -> BriefingConfig:
     return BriefingConfig(repos, lookback, instructions)
 
 
+def parse_yaml(text: str, where: str) -> BriefingConfig:
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as error:
+        raise ConfigError(f"{where} is not valid YAML: {error}") from error
+    return from_mapping(data)
+
+
 def load_config(path: Path) -> BriefingConfig:
     """Read the config file; a missing file is an empty config, a broken one an error."""
     if not path.exists():
         return BriefingConfig()
-    try:
-        data = yaml.safe_load(path.read_text())
-    except yaml.YAMLError as error:
-        raise ConfigError(f"{path} is not valid YAML: {error}") from error
-    return from_mapping(data)
+    return parse_yaml(path.read_text(), str(path))
+
+
+def load_active_config(
+    saved: Path, secret: str | None, default: Path
+) -> tuple[BriefingConfig, str]:
+    """The config in effect, and where it came from.
+
+    A config saved from the wizard wins, then the `BRIEFING_CONFIG_YAML` secret, then the public
+    default committed in the repository. Private repository names belong in the secret, never in
+    the public default.
+    """
+    if saved.exists():
+        return load_config(saved), "saved from the setup wizard"
+    if secret:
+        return parse_yaml(secret, "BRIEFING_CONFIG_YAML"), "the BRIEFING_CONFIG_YAML secret"
+    return load_config(default), "the default in the repository"
 
 
 def save_config(config: BriefingConfig, path: Path) -> None:

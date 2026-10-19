@@ -74,10 +74,14 @@ describe("fetchRepoActivity", () => {
 		expect(authed).toMatchObject({ Authorization: "Bearer t0ken" });
 	});
 
-	it("says a missing repository is missing or private", async () => {
+	it("says a missing repository may be private, and what to set", async () => {
 		const github = fakeGitHub({});
 		await expect(fetchRepoActivity({ fetch: github.fetch }, "acme/nope", WINDOW)).rejects.toThrow(
-			"acme/nope was not found, or it is not public",
+			"acme/nope was not found, or it is private. Set GITHUB_TOKEN to read private repositories.",
+		);
+		const withToken = { fetch: github.fetch, token: "t" };
+		await expect(fetchRepoActivity(withToken, "acme/nope", WINDOW)).rejects.toThrow(
+			"acme/nope was not found, or GITHUB_TOKEN cannot read it",
 		);
 	});
 

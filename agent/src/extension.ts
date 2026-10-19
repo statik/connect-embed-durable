@@ -1,7 +1,9 @@
 import { Type } from "@earendil-works/pi-ai";
 import { defineDoc, defineExtension, defineTool, section } from "@earendil-works/pi-durable";
+import type { TraceUsage } from "./trace.ts";
 import type { RepoConfig } from "./config.ts";
 import {
+	type ActivityItem,
 	countByKind,
 	fetchRepoActivity,
 	type GitHubClient,
@@ -20,6 +22,12 @@ export type BriefingState = {
 	repos: RepoConfig[];
 	/** Every link `repo_activity` returned. Only these may appear in the briefing. */
 	citable: string[];
+	/** Every item `repo_activity` returned, for the app to query. */
+	items: ActivityItem[];
+	/** What writing the briefing cost, fixed when it first completes; follow-ups are not in it. */
+	usage: TraceUsage | null;
+	/** What each follow-up question cost, by request ID, fixed when it first completes. */
+	asks: Record<string, TraceUsage>;
 	activity: Record<
 		string,
 		{ counts: Record<ItemKind, number>; commits: number; truncated: boolean }
@@ -32,7 +40,17 @@ export const BriefingDoc = defineDoc<BriefingState>({
 	scope: "conversation",
 	history: "latest",
 	fork: "current",
-	initial: () => ({ date: "", since: "", until: "", repos: [], citable: [], activity: {} }),
+	initial: () => ({
+		date: "",
+		since: "",
+		until: "",
+		repos: [],
+		citable: [],
+		items: [],
+		usage: null,
+		asks: {},
+		activity: {},
+	}),
 });
 
 /** Maps each briefing key to its conversation, so the same date and config reuse one transcript. */
@@ -87,6 +105,11 @@ export function createBriefingExtension(github: GitHubClient) {
 				const doc = await tx.doc(BriefingDoc, api.conversationId);
 				const known = new Set(doc.citable);
 				for (const item of activity.items) if (!known.has(item.url)) doc.citable.push(item.url);
+				// A rerun of the tool (a crash, or a follow-up question) must not add items twice.
+				const seen = new Set(doc.items.map((item) => `${item.kind} ${item.url}`));
+				for (const item of activity.items) {
+					if (!seen.has(`${item.kind} ${item.url}`)) doc.items.push(item);
+				}
 				doc.activity[wanted.name] = {
 					counts: countByKind(activity.items),
 					commits: activity.commits,
