@@ -1,6 +1,6 @@
 [project]
 name = "connect-embed-durable"
-version = "0.2.0"
+version = "0.2.1"
 description = "A pi-durable daily GitHub briefing agent, configured from Shiny, deployable to Posit Connect Cloud"
 license = "MIT"
 requires-python = ">=3.13"
@@ -10,7 +10,7 @@ dependencies = [
     "markdown-it-py==4.2.0",
     "openai==3.35.1",
     "pandas==3.0.6",
-    "pi-briefing==0.2.0",
+    "pi-briefing==0.2.1",
     "pyyaml==6.0.3",
     "shiny==1.8.0",
     "shinychat==0.7.2",

@@ -153,6 +153,13 @@ prices both from one catalog. Building that showed these differences.
 - **Faux models finish too fast to stream.** The faux provider answers at once, so no partial
   text is committed and no `text_delta` events arrive. To test streaming, pass
   `fauxProvider({ tokensPerSecond })`.
+- **pip drops the execute bit unless the wheel marks a regular file.** pip keeps a file's execute
+  permission only when its zip entry's mode includes the regular-file type bits (`S_IFREG`), not
+  just `0755`. go-to-wheel, which this project copied, sets only the permission bits. uv keeps
+  the bit either way, so local runs worked, but Connect Cloud installs with pip as one user and
+  runs the app as another. The app could not restore the bit and failed with `EPERM`.
+  `tests/test_wheel_install.py` now installs a built wheel with pip and checks the bit. This is
+  worth reporting to go-to-wheel.
 - **Size.** The Bun executable is about 96 MB on Linux and 66 MB on macOS. The compressed wheels
   are 24 to 36 MB. That is acceptable for Connect Cloud, but too large to commit to git, so the
   wheels go in GitHub releases.

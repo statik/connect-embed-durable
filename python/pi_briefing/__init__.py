@@ -18,7 +18,7 @@ from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
 from typing import Any
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __all__ = [
     "BriefingError",
     "binary_path",
@@ -50,15 +50,23 @@ def binary_path() -> Path:
 
     Raises:
         FileNotFoundError: The wheel for this platform was not installed.
+        PermissionError: The file is not executable and this user may not change that.
     """
     binary = Path(__file__).parent / "bin" / "pi-briefing"
     if not binary.exists():
         raise FileNotFoundError(
             f"{binary} is missing: install the pi-briefing wheel built for this platform"
         )
-    mode = binary.stat().st_mode
-    if not mode & stat.S_IXUSR:
-        binary.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    if os.access(binary, os.X_OK):
+        return binary
+    try:
+        binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    except PermissionError as error:
+        raise PermissionError(
+            f"{binary} is not executable, and this user cannot change that. The installer "
+            "dropped its execute bit; reinstall pi-briefing 0.2.1 or later, whose wheels "
+            "mark it so that pip keeps it."
+        ) from error
     return binary
 
 

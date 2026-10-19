@@ -39,8 +39,12 @@ PLATFORM_TAGS = {
     "darwin-x64": "macosx_13_0_x86_64",
 }
 
-EXECUTABLE = (stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH) << 16
-REGULAR = (stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH) << 16
+# Unix mode in the high 16 bits of each entry's external attributes. The file-type bits
+# (S_IFREG) matter: pip keeps the execute bit only for entries marked as regular files, and
+# without it installs the executable as 0644. (go-to-wheel omits them too.)
+EXECUTABLE = (stat.S_IFREG | 0o755) << 16
+REGULAR = (stat.S_IFREG | 0o644) << 16
+UNIX = 3  # ZipInfo.create_system for Unix, so readers interpret the mode bits
 
 
 def package_version() -> str:
@@ -112,6 +116,7 @@ def build_wheel(platform: str, version: str) -> Path:
         for path, data in files.items():
             entry = zipfile.ZipInfo(path, date_time=(2020, 1, 1, 0, 0, 0))
             entry.compress_type = zipfile.ZIP_DEFLATED
+            entry.create_system = UNIX
             entry.external_attr = EXECUTABLE if path.endswith("/bin/pi-briefing") else REGULAR
             wheel.writestr(entry, data)
     return wheel_path
