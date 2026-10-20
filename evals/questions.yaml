@@ -1,0 +1,25 @@
+# Questions the agents should answer well, in the user's own words.
+#
+# They decide which trusted measures to build and what the collector stores, and they become the
+# evaluation set comparing commons with pi-durable. Do not change the agents only to make these
+# pass. Questions marked hold_out are not used while building; they check the finished agent.
+#
+# kind: easy | analysis | ambiguous | partial | unanswerable
+
+questions:
+  - id: work-mix
+    question: >-
+      What percentage of the work we are doing is classified as maintenance/security work vs
+      feature work that adds value?
+    kind: ambiguous
+    hold_out: false
+    spec: docs/work-classification.md
+    expected_path: trusted measure (work_mix)
+    good_answer: >-
+      Shares for feature, maintenance, security, and unclassified, both by number of merged pull
+      requests and by lines changed. States the repositories, the 30-day window, the number of
+      pull requests, and that a rule set did the classifying. May add a model-assisted split of
+      the unclassified share, marked Untrusted.
+    must_not: >-
+      Present the model's guesses as the trusted result, hide or redistribute the unclassified
+      share, or count a fix as feature or maintenance without the signal the spec requires.

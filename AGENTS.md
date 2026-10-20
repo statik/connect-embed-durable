@@ -49,3 +49,16 @@ services use generic User-Agent values (`pi-briefing-agent`, `pi-briefing-setup`
   stream for commons' model. Keep SQLite and DuckDB real.
 - Pin exact versions. pnpm enforces a one-day release age and blocks install scripts
   (`agent/pnpm-workspace.yaml`).
+
+## commons work
+
+Load the `commons` skill (`.agents/skills/commons/`, or `/skill:commons` in pi) before changing the
+commons agent, its data, measures, dictionary, or evaluation. It is written for R; in this
+Python project:
+
+- `commons()` is `commons.Commons(...)`; see `app/ask_agent.py`.
+- A measure is a function decorated with `@commons.measure(description=..., provenance=[...])`.
+  Provenance goes in that `provenance` argument, not in roxygen `@provenance` tags.
+- `data_source(con, dictionary = "...")` is `commons.data_source(..., dictionary=path)`.
+- `vitals` and `trajectory_read()` are R only. Python commons blocks chatlas' `to_solver()`, so an
+  evaluation here needs its own harness. Estimate its cost and get approval before any run.
